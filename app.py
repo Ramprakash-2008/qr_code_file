@@ -12,6 +12,7 @@ load_dotenv()
 
 app = Flask(__name__)
 DB_PATH = 'database.db'
+init_db()
 OWNER_EMAIL = os.getenv('OWNER_EMAIL')
 APP_PASSWORD = os.getenv('APP_PASSWORD')
 BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
@@ -103,5 +104,4 @@ def process_request(action, token):
     return f"User has been {action}d."
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)
