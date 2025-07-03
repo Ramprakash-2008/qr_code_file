@@ -86,22 +86,26 @@ def request_access(token):
     return render_template('request_form.html')
 
 @app.route('/process/<action>/<token>')
+@app.route('/process/<action>/<token>')
 def process_request(action, token):
-    if action == 'approve':
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT gmail FROM requests WHERE token = ?", (token,))
-            gmail = cur.fetchone()[0]
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT gmail FROM requests WHERE token = ?", (token,))
+        row = cur.fetchone()
+
+        if not row:
+            return "❌ Invalid or expired token."
+
+        gmail = row[0]
+
+        if action == 'approve':
             conn.execute("UPDATE requests SET status = ?, approved_at = ? WHERE token = ?",
                          ('approved', datetime.now(), token))
-        send_email(gmail, "Access Approved", "Your request has been approved. You can now scan the QR again to access the file.")
-    elif action == 'deny':
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT gmail FROM requests WHERE token = ?", (token,))
-            gmail = cur.fetchone()[0]
+            send_email(gmail, "Access Approved", "✅ Your request has been approved. Scan the QR again to access the file.")
+        elif action == 'deny':
             conn.execute("UPDATE requests SET status = ? WHERE token = ?", ('denied', token))
-        send_email(gmail, "Access Denied", "Your request for access was denied.")
+            send_email(gmail, "Access Denied", "❌ Your request was denied.")
+
     return f"User has been {action}d."
 
 if __name__ == '__main__':
