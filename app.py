@@ -50,27 +50,8 @@ def send_email(to, subject, html):
         server.send_message(msg)
 
 # QR generator
-@app.route('/generate', methods=['GET', 'POST'])
-def generate_qr():
-    if request.method == 'POST':
-        file_link = request.form['file_link']
-        token = str(uuid.uuid4())
-
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
-                         (token, file_link, 'new'))
-
-        qr_url = f"{BASE_URL}/request/{token}"
-        img = qrcode.make(qr_url)
-        img_filename = f"{token}.png"
-        img_path = os.path.join(QR_DIR, img_filename)
-        img.save(img_path)
-
-        if not os.path.exists(img_path):
-            return f"QR code file not found at {img_path}", 404
-
-        return send_file(img_path, as_attachment=True)
-    return render_template('generate.html')
+when i run it in this server for qr code i get Internal Server Error
+The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.
 
 # Request form
 @app.route('/request/<token>', methods=['GET', 'POST'])
