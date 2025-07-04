@@ -80,7 +80,7 @@ def handle_qr_scan(token):
                 if entered_gmail == (approved_gmail or '').strip().lower():
                     return redirect(file_link)
                 else:
-                    return render_template('request_form.html', token=token) 
+                    return redirect(url_for('handle_qr_or_request', token=token)) 
             elif status in ['new', 'pending']:
                 now = datetime.now()
                 conn.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
