@@ -6,19 +6,15 @@ from flask import Flask, render_template, request, redirect, url_for, send_file
 from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Load environment variables
 load_dotenv()
-
-# Setup Flask
 app = Flask(__name__)
+DB_PATH = 'database.db'
+OWNER_EMAIL = os.getenv('OWNER_EMAIL')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
+BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
 
-# Paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'database.db')
-QR_DIR = os.path.join(BASE_DIR, 'static', 'qr')
-os.makedirs(QR_DIR, exist_ok=True)
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
@@ -31,14 +27,7 @@ def init_db():
                 approved_at DATETIME
             )
         """)
-# Email config
-OWNER_EMAIL = os.getenv('OWNER_EMAIL')
-APP_PASSWORD = os.getenv('APP_PASSWORD')
-BASE_URL = os.getenv('BASE_URL')  # e.g., https://yourapp.onrender.com
-init_db()
-# DB init
 
-# Send email
 def send_email(to, subject, html):
     msg = MIMEText(html, "html")
     msg['Subject'] = subject
@@ -49,77 +38,74 @@ def send_email(to, subject, html):
         server.login(OWNER_EMAIL, APP_PASSWORD)
         server.send_message(msg)
 
-# QR generator
-"""when i run it in this server for qr code i get Internal Server Error
-The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.
-"""
 @app.route('/generate', methods=['GET', 'POST'])
 def generate_qr():
     if request.method == 'POST':
-        try:
-            file_link = request.form['file_link']
-            token = str(uuid.uuid4())
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
-                             (token, file_link, 'new'))
-            qr_url = f"{BASE_URL}/request/{token}"
-            
-            # Ensure the QR directory exists
-            qr_dir = os.path.join("static", "qr")
-            os.makedirs(qr_dir, exist_ok=True)
-
-            img_path = os.path.join(qr_dir, f"{token}.png")
-            img = qrcode.make(qr_url)
-            img.save(img_path)
-
-            return send_file(img_path, as_attachment=True)
-
-        except Exception as e:
-            return f"Internal Server Error: {str(e)}", 500
-
+        file_link = request.form['file_link']
+        token = str(uuid.uuid4())
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
+                         (token, file_link, 'new'))
+        qr_url = f"{BASE_URL}/request/{token}"
+        img = qrcode.make(qr_url)
+        img_path = os.path.join("static", "qr", f"{token}.png")
+        os.makedirs(os.path.dirname(img_path), exist_ok=True)
+        img.save(img_path)
+        return send_file(img_path, as_attachment=True)
     return render_template('generate.html')
-@app.route('/request/<token>')
+
+@app.route('/request/<token>', methods=['GET', 'POST'])
 def handle_qr_scan(token):
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
-        cur.execute("SELECT file_link, status FROM requests WHERE token = ?", (token,))
+        cur.execute("SELECT file_link, status, gmail FROM requests WHERE token = ?", (token,))
         row = cur.fetchone()
 
         if not row:
             return "❌ Invalid or expired token."
 
-        file_link, status = row
+        file_link, status, gmail = row
+
         if status == 'approved':
             return redirect(file_link)
-        elif status == 'new' or status == 'pending':
-            return render_template('request_form.html')
+        elif status in ['new', 'pending']:
+            return render_template('request_form.html', token=token)
         elif status == 'denied':
             return "❌ Your access request was denied."
 
-# Request form
-@app.route('/request/<token>', methods=['GET', 'POST'])
-def request_access(token):
+@app.route('/', methods=['GET', 'POST'])
+def request_access():
+    token = request.args.get('token')
     if request.method == 'POST':
         gmail = request.form['gmail']
         now = datetime.now()
+
         with sqlite3.connect(DB_PATH) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT status FROM requests WHERE gmail = ? AND token = ?", (gmail, token))
+            cur.execute("SELECT status FROM requests WHERE gmail = ?", (gmail,))
             row = cur.fetchone()
-            if row:
-                if row[0] == 'approved':
-                    return render_template('already_approved.html')
+
+            if row and row[0] == 'approved':
+                return render_template('already_approved.html')
             else:
-                conn.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = ? WHERE token = ?",
-                             (gmail, 'pending', now, token))
+                if token:
+                    conn.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
+                                 (gmail, 'pending', token))
+                else:
+                    new_token = str(uuid.uuid4())
+                    conn.execute("INSERT INTO requests (gmail, token, status, approved_at) VALUES (?, ?, ?, NULL)",
+                                 (gmail, new_token, 'pending'))
+                    token = new_token
+
                 approve_url = url_for('process_request', action='approve', token=token, _external=True)
                 deny_url = url_for('process_request', action='deny', token=token, _external=True)
+
                 send_email(OWNER_EMAIL, "File Access Request",
                            f"User: {gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
-        return render_template('success.html')
-    return render_template('request_form.html')
 
-# Approve/Deny routes
+        return render_template('success.html')
+    return render_template('request_form.html', token=token)
+
 @app.route('/process/<action>/<token>')
 def process_request(action, token):
     with sqlite3.connect(DB_PATH) as conn:
@@ -142,7 +128,6 @@ def process_request(action, token):
 
     return f"User has been {action}d."
 
-# Debug route
 @app.route('/debug/requests')
 def debug_requests():
     with sqlite3.connect(DB_PATH) as conn:
@@ -151,6 +136,6 @@ def debug_requests():
         rows = cur.fetchall()
     return {'requests': rows}
 
-# Run
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)
