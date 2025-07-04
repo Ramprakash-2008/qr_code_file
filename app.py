@@ -62,36 +62,49 @@ def generate_qr():
 
     return render_template('generate.html')
 @app.route('/request/<token>', methods=['GET', 'POST'])
-def handle_qr_or_request(token):
+def handle_qr_scan(token):
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("SELECT file_link, status, gmail FROM requests WHERE token = ?", (token,))
         row = cur.fetchone()
 
-    if not row:
-        return "❌ Invalid or expired token."
+        if not row:
+            return "❌ Invalid or expired token."
 
-    file_link, status, existing_gmail = row
+        file_link, status, approved_gmail = row
 
-    if status == 'approved':
-        return redirect(file_link)
+        if request.method == 'POST':
+            entered_gmail = request.form['gmail'].strip().lower()
 
-    if request.method == 'POST':
-        gmail = request.form['gmail']
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
-                        (gmail, 'pending', token))
+            if status == 'approved':
+                if entered_gmail == (approved_gmail or '').strip().lower():
+                    return redirect(file_link)
+                else:
+                    return "⚠️ This Gmail is not authorized for this token."
 
-            approve_url = url_for('process_request', action='approve', token=token, _external=True)
-            deny_url = url_for('process_request', action='deny', token=token, _external=True)
+            elif status in ['new', 'pending']:
+                now = datetime.now()
+                conn.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
+                             (entered_gmail, 'pending', token))
 
-            send_email(OWNER_EMAIL, "File Access Request",
-                       f"User: {gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
+                approve_url = url_for('process_request', action='approve', token=token, _external=True)
+                deny_url = url_for('process_request', action='deny', token=token, _external=True)
 
-        return render_template('success.html')
+                send_email(OWNER_EMAIL, "File Access Request",
+                           f"User: {entered_gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
 
-    return render_template('request_form.html', token=token)
+                return render_template('success.html')
+
+            elif status == 'denied':
+                return "❌ Your request was denied."
+
+        # If GET method or re-access attempt before approval
+        if status == 'approved':
+            return render_template('enter_gmail.html', token=token)
+        elif status in ['new', 'pending']:
+            return render_template('request_form.html', token=token)
+        elif status == 'denied':
+            return "❌ Your request was denied."
 
 @app.route('/process/<action>/<token>')
 def process_request(action, token):
