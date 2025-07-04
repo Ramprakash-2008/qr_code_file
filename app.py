@@ -28,6 +28,8 @@ init_db()
 OWNER_EMAIL = os.getenv('OWNER_EMAIL')
 APP_PASSWORD = os.getenv('APP_PASSWORD')
 BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
+QR_DIR = os.path.join('static', 'qr')
+os.makedirs(QR_DIR, exist_ok=True)
 
 
 
@@ -51,8 +53,10 @@ def generate_qr():
                          (token, file_link, 'new'))
         qr_url = f"{BASE_URL}/request/{token}"
         img = qrcode.make(qr_url)
-        img_path = f"static/qr/{token}.png"
+        img_filename = f"{token}.png"
+        img_path = os.path.join(QR_DIR, img_filename)
         img.save(img_path)
+
         return send_file(img_path, as_attachment=True)
     return render_template('generate.html')
 
