@@ -99,6 +99,29 @@ def handle_qr_or_request(token):
         return render_template('request_form.html', token=token, info="✅ Token approved. Please enter Gmail to continue.")
     else:
         return render_template('request_form.html', token=token)
+@app.route('/process/<action>/<token>')
+def process_request(action, token):
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT gmail FROM requests WHERE token = ?", (token,))
+        row = cur.fetchone()
+
+        if not row:
+            return "❌ Invalid or expired token."
+
+        gmail = row[0]
+
+        if action == 'approve':
+            conn.execute("UPDATE requests SET status = ?, approved_at = ? WHERE token = ?",
+                         ('approved', datetime.now(), token))
+            send_email(gmail, "Access Approved", "✅ Your request has been approved. Scan the QR again to access the file.")
+        elif action == 'deny':
+            conn.execute("UPDATE requests SET status = ? WHERE token = ?", ('denied', token))
+            send_email(gmail, "Access Denied", "❌ Your request was denied.")
+        else:
+            return "❌ Invalid action."
+
+    return f"User has been {action}d successfully."
 
 
 @app.route('/debug/requests')
