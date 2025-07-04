@@ -56,7 +56,7 @@ def generate_qr():
         return send_file(img_path, as_attachment=True)
     return render_template('generate.html')
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/request/<token>', methods=['GET', 'POST'])
 def request_access():
     if request.method == 'POST':
         gmail = request.form['gmail']
