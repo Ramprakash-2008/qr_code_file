@@ -56,37 +56,27 @@ def generate_qr():
         return send_file(img_path, as_attachment=True)
     return render_template('generate.html')
 
-@app.route('/request/<token>', methods=["GET", "POST"])
-def request_access(token):
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
-
-        # Check if token exists
-        cur.execute("SELECT gmail, status FROM requests WHERE token = ?", (token,))
-        row = cur.fetchone()
-        if not row:
-            return "❌ Invalid or expired token."
-
-        gmail, status = row
-
-        # If already approved, redirect
-        if status == 'approved':
-            return redirect(FILE_LINK_FROM_DB_OR_STATIC)
-
-        # Handle request submission
-        if request.method == "POST":
-            gmail_input = request.form.get("gmail")
-            print("📩 Gmail received:", gmail_input)  # Debug print
-
-            if gmail_input:
-                conn.execute("UPDATE requests SET gmail = ? WHERE token = ?", (gmail_input, token))
-                conn.commit()
-                # send_owner_request_email(gmail_input, token) ← if email logic exists
-                return "✅ Request submitted successfully. Please wait for approval."
-
-        return render_template("request_form.html", token=token)
-
-
+@app.route('/', methods=['GET', 'POST'])
+def request_access():
+    if request.method == 'POST':
+        gmail = request.form['gmail']
+        now = datetime.now()
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT status FROM requests WHERE gmail = ?", (gmail,))
+            row = cur.fetchone()
+            if row:
+                if row[0] == 'approved':
+                    return render_template('already_approved.html')
+            else:
+                conn.execute("INSERT INTO requests (gmail, status, timestamp) VALUES (?, ?, ?)",
+                             (gmail, 'pending', now))
+                approve_url = url_for('process_request', gmail=gmail, action='approve', _external=True)
+                deny_url = url_for('process_request', gmail=gmail, action='deny', _external=True)
+                send_email(OWNER_EMAIL, "File Access Request",
+                           f"User: {gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
+        return render_template('success.html')
+    return render_template('request_form.html')
 @app.route('/process/<action>/<token>')
 def process_request(action, token):
     with sqlite3.connect(DB_PATH) as conn:
