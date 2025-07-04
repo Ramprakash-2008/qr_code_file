@@ -45,7 +45,7 @@ def generate_qr():
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
                              (token, file_link, 'new'))
-            qr_url = f"{BASE_URL}/"
+            qr_url = f"{BASE_URL}/request/{token}"
             
             # Ensure the QR directory exists
             qr_dir = os.path.join("static", "qr")
@@ -61,58 +61,36 @@ def generate_qr():
             return f"Internal Server Error: {str(e)}", 500
 
     return render_template('generate.html')
-
-
 @app.route('/request/<token>', methods=['GET', 'POST'])
-def handle_qr_scan(token):
+def handle_qr_or_request(token):
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("SELECT file_link, status, gmail FROM requests WHERE token = ?", (token,))
         row = cur.fetchone()
 
-        if not row:
-            return "❌ Invalid or expired token."
+    if not row:
+        return "❌ Invalid or expired token."
 
-        file_link, status, gmail = row
+    file_link, status, existing_gmail = row
 
-        if status == 'approved':
-            return redirect(file_link)
-        elif status in ['new', 'pending']:
-            return render_template('request_form.html', token=token)
-        elif status == 'denied':
-            return "❌ Your access request was denied."
+    if status == 'approved':
+        return redirect(file_link)
 
-@app.route('/', methods=['GET', 'POST'])
-def request_access():
-    token = request.args.get('token')
     if request.method == 'POST':
         gmail = request.form['gmail']
-        now = datetime.now()
-
         with sqlite3.connect(DB_PATH) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT status FROM requests WHERE gmail = ?", (gmail,))
-            row = cur.fetchone()
+            cur.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
+                        (gmail, 'pending', token))
 
-            if row and row[0] == 'approved':
-                return render_template('already_approved.html')
-            else:
-                if token:
-                    conn.execute("UPDATE requests SET gmail = ?, status = ?, approved_at = NULL WHERE token = ?",
-                                 (gmail, 'pending', token))
-                else:
-                    new_token = str(uuid.uuid4())
-                    conn.execute("INSERT INTO requests (gmail, token, status, approved_at) VALUES (?, ?, ?, NULL)",
-                                 (gmail, new_token, 'pending'))
-                    token = new_token
+            approve_url = url_for('process_request', action='approve', token=token, _external=True)
+            deny_url = url_for('process_request', action='deny', token=token, _external=True)
 
-                approve_url = url_for('process_request', action='approve', token=token, _external=True)
-                deny_url = url_for('process_request', action='deny', token=token, _external=True)
-
-                send_email(OWNER_EMAIL, "File Access Request",
-                           f"User: {gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
+            send_email(OWNER_EMAIL, "File Access Request",
+                       f"User: {gmail}<br><a href='{approve_url}'>Accept</a> | <a href='{deny_url}'>Deny</a>")
 
         return render_template('success.html')
+
     return render_template('request_form.html', token=token)
 
 @app.route('/process/<action>/<token>')
