@@ -41,18 +41,29 @@ def send_email(to, subject, html):
 @app.route('/generate', methods=['GET', 'POST'])
 def generate_qr():
     if request.method == 'POST':
-        file_link = request.form['file_link']
-        token = str(uuid.uuid4())
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
-                         (token, file_link, 'new'))
-        qr_url = f"{BASE_URL}/request/{token}"
-        img = qrcode.make(qr_url)
-        img_path = os.path.join("static", "qr", f"{token}.png")
-        os.makedirs(os.path.dirname(img_path), exist_ok=True)
-        img.save(img_path)
-        return send_file(img_path, as_attachment=True)
+        try:
+            file_link = request.form['file_link']
+            token = str(uuid.uuid4())
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
+                             (token, file_link, 'new'))
+            qr_url = f"{BASE_URL}/request/{token}"
+            
+            # Ensure the QR directory exists
+            qr_dir = os.path.join("static", "qr")
+            os.makedirs(qr_dir, exist_ok=True)
+
+            img_path = os.path.join(qr_dir, f"{token}.png")
+            img = qrcode.make(qr_url)
+            img.save(img_path)
+
+            return send_file(img_path, as_attachment=True)
+
+        except Exception as e:
+            return f"Internal Server Error: {str(e)}", 500
+
     return render_template('generate.html')
+
 
 @app.route('/request/<token>', methods=['GET', 'POST'])
 def handle_qr_scan(token):
