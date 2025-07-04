@@ -78,6 +78,23 @@ def generate_qr():
             return f"Internal Server Error: {str(e)}", 500
 
     return render_template('generate.html')
+@app.route('/request/<token>')
+def handle_qr_scan(token):
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT file_link, status FROM requests WHERE token = ?", (token,))
+        row = cur.fetchone()
+
+        if not row:
+            return "❌ Invalid or expired token."
+
+        file_link, status = row
+        if status == 'approved':
+            return redirect(file_link)
+        elif status == 'new' or status == 'pending':
+            return render_template('request_form.html')
+        elif status == 'denied':
+            return "❌ Your access request was denied."
 
 # Request form
 @app.route('/request/<token>', methods=['GET', 'POST'])
