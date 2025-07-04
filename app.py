@@ -14,7 +14,7 @@ DB_PATH = 'database.db'
 OWNER_EMAIL = os.getenv('OWNER_EMAIL')
 APP_PASSWORD = os.getenv('APP_PASSWORD')
 BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
-
+init_db()
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
@@ -148,5 +148,4 @@ def debug_requests():
     return {'requests': rows}
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)
