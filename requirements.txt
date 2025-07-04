@@ -3,4 +3,3 @@ qrcode
 python-dotenv
 gunicorn
 Pillow
-email
