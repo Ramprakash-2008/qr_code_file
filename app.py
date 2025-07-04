@@ -7,14 +7,6 @@ from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
-
-load_dotenv()
-app = Flask(__name__)
-DB_PATH = 'database.db'
-OWNER_EMAIL = os.getenv('OWNER_EMAIL')
-APP_PASSWORD = os.getenv('APP_PASSWORD')
-BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
-init_db()
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
@@ -27,7 +19,13 @@ def init_db():
                 approved_at DATETIME
             )
         """)
-
+load_dotenv()
+app = Flask(__name__)
+DB_PATH = 'database.db'
+OWNER_EMAIL = os.getenv('OWNER_EMAIL')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
+BASE_URL = os.getenv('BASE_URL')  # e.g. https://yourapp.onrender.com
+init_db()
 def send_email(to, subject, html):
     msg = MIMEText(html, "html")
     msg['Subject'] = subject
