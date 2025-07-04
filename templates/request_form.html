@@ -4,8 +4,9 @@
 <body>
 <h2>Request Access to File</h2>
 <form method="post">
-    Gmail: <input type="email" name="gmail" required>
-    <button type="submit">Request</button>
+    <input type="email" name="gmail" placeholder="Enter your Gmail" required>
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit">Request Access</button>
 </form>
 </body>
 </html>
