@@ -19,13 +19,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
 QR_DIR = os.path.join(BASE_DIR, 'static', 'qr')
 os.makedirs(QR_DIR, exist_ok=True)
-
-# Email config
-OWNER_EMAIL = os.getenv('OWNER_EMAIL')
-APP_PASSWORD = os.getenv('APP_PASSWORD')
-BASE_URL = os.getenv('BASE_URL')  # e.g., https://yourapp.onrender.com
-
-# DB init
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
@@ -38,6 +31,12 @@ def init_db():
                 approved_at DATETIME
             )
         """)
+# Email config
+OWNER_EMAIL = os.getenv('OWNER_EMAIL')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
+BASE_URL = os.getenv('BASE_URL')  # e.g., https://yourapp.onrender.com
+init_db()
+# DB init
 
 # Send email
 def send_email(to, subject, html):
@@ -130,5 +129,4 @@ def debug_requests():
 
 # Run
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)
