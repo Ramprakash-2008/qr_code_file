@@ -45,7 +45,7 @@ def generate_qr():
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute("INSERT INTO requests (token, file_link, status) VALUES (?, ?, ?)",
                              (token, file_link, 'new'))
-            qr_url = f"{BASE_URL}/request/{token}"
+            qr_url = f"{BASE_URL}/"
             
             # Ensure the QR directory exists
             qr_dir = os.path.join("static", "qr")
